@@ -102,20 +102,21 @@ OAuth and external accounts:
 
 Playlists:
 - `POST /playlists/link`
-- `GET /playlists`
+- `GET /playlists` (local + linked)
+- `GET /playlists/{playlist_id}`
 - `POST /playlists/local/create`
 - `POST /playlists/local/{playlist_id}/update`
-- `DELETE /playlists/{playlist_id}`
+- `DELETE /playlists/delete/{playlist_id}`
 
 Library:
+- `GET /library`
 - `POST /library/add-track`
 - `POST /library/remove-track`
-- `GET /library/metadata`
 
 Search:
 - `POST /search/tracks`
-- `POST /search/playlists`
-- `POST /search/playlists/stream` (JSONL; first line is `{"youtube":[...]}`, second line is `{"spotify":[...]}`)
+- `POST /search/playlists/spotify`
+- `POST /search/playlists/youtube`
 - `GET /capabilities` (credential/access flags for UI adaptation)
 
 Sync + media:
@@ -133,6 +134,9 @@ Most protected API endpoints expect a `session_token` request header. Tokens are
 - accepted true values: `1`, `true`, `yes`, `on`
 - default when unset: `false`
 
+`POST /sign-up` defaults and validation:
+- `username`: 3-64 chars (leading/trailing whitespace trimmed)
+- `password`: 8-128 chars
 ## Sync Flow
 
 `POST /sync-library`:

@@ -310,11 +310,11 @@
       <pre id="syncOutput"></pre>
     </div>
 
-    <!-- GET METADATA -->
+    <!-- GET LIBRARY -->
     <div class="card">
-      <h2>Get Metadata</h2>
-      <button onclick="getMetadata()">Load Metadata</button>
-      <pre id="metadataOutput"></pre>
+      <h2>Get Library</h2>
+      <button onclick="getLibrary()">Load Library</button>
+      <pre id="libraryOutput"></pre>
     </div>
 
     <!-- FETCH TRACK MEDIA -->
@@ -468,93 +468,18 @@
         songResults.textContent = JSON.stringify(await res.json(), null, 2);
       }
       async function searchPlaylists() {
-        playlistResults.textContent = "";
-        const headers = { "Content-Type": "application/json" };
-        if (sessionToken) headers["session_token"] = sessionToken;
-        const res = await fetch("/search/playlists/stream", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ query: playlistQuery.value })
-        });
-        if (!res.ok || !res.body) {
-          playlistResults.textContent += `Failed: ${res.status} ${res.statusText}\n`;
-          return;
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        const aggregate = { youtube: [], spotify: [] };
-        const findJsonObjectEnd = (text) => {
-          let depth = 0;
-          let inString = false;
-          let escape = false;
-          let started = false;
-          for (let i = 0; i < text.length; i++) {
-            const ch = text[i];
-            if (!started) {
-              if (/\s/.test(ch)) continue;
-              if (ch !== "{") return -1;
-              started = true;
-              depth = 1;
-              continue;
-            }
-            if (inString) {
-              if (escape) {
-                escape = false;
-              } else if (ch === "\\") {
-                escape = true;
-              } else if (ch === "\"") {
-                inString = false;
-              }
-              continue;
-            }
-            if (ch === "\"") {
-              inString = true;
-            } else if (ch === "{") {
-              depth += 1;
-            } else if (ch === "}") {
-              depth -= 1;
-              if (depth === 0) return i + 1;
-            }
-          }
-          return -1;
-        };
-        const handlePlaylistEvent = (evt) => {
-          if (!evt || typeof evt !== "object") return;
-          if (Array.isArray(evt.youtube)) {
-            aggregate.youtube = evt.youtube;
-            playlistResults.textContent += JSON.stringify({ youtube: evt.youtube }, null, 2) + "\n";
-          }
-          if (Array.isArray(evt.spotify)) {
-            aggregate.spotify = evt.spotify;
-            playlistResults.textContent += JSON.stringify({ spotify: evt.spotify }, null, 2) + "\n";
-          }
-        };
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          while (true) {
-            const end = findJsonObjectEnd(buffer);
-            if (end === -1) break;
-            const chunk = buffer.slice(0, end);
-            buffer = buffer.slice(end).trimStart();
-            try {
-              const evt = JSON.parse(chunk);
-              handlePlaylistEvent(evt);
-            } catch {
-              // keep going; malformed chunk should not block subsequent objects
-            }
-          }
-        }
-        if (buffer.trim()) {
-          try {
-            const evt = JSON.parse(buffer.trim());
-            handlePlaylistEvent(evt);
-          } catch { }
-        }
+        const [spotifyRes, youtubeRes] = await Promise.all([
+          fetch("/search/playlists/spotify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: playlistQuery.value }) }),
+          fetch("/search/playlists/youtube", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: playlistQuery.value }) }),
+        ]);
+        playlistResults.textContent = JSON.stringify(
+          {
+            spotify: spotifyRes.ok ? await spotifyRes.json() : [],
+            youtube: youtubeRes.ok ? await youtubeRes.json() : [],
+          },
+          null,
+          2
+        );
       }
 
       // ---------------- PLAYLISTS ----------------
@@ -579,18 +504,18 @@
       }
       async function deleteLocalPlaylist() {
         const playlist_id = localPlaylistName.value;
-        const res = await fetch(`/playlists/local/${playlist_id}`, { method: "DELETE", headers: { "session_token": sessionToken } });
+        const res = await fetch(`/playlists/delete/${playlist_id}`, { method: "DELETE", headers: { "session_token": sessionToken } });
         localPlaylistResult.textContent = JSON.stringify(await res.json(), null, 2);
       }
 
       async function deletePlaylist() {
         const playlist_id = deletePlaylistId.value;
         const cascade = cascadeDelete.checked;
-        const res = await fetch(`/playlists/${playlist_id}?cascade=${cascade}`, { method: "DELETE", headers: { "session_token": sessionToken } });
+        const res = await fetch(`/playlists/delete/${playlist_id}?cascade=${cascade}`, { method: "DELETE", headers: { "session_token": sessionToken } });
         deletePlaylistResult.textContent = JSON.stringify(await res.json(), null, 2);
       }
 
-      // ---------------- SYNC / METADATA ----------------
+      // ---------------- SYNC / LIBRARY ----------------
       async function syncAll() {
         const output = syncOutput; output.textContent = "Starting sync…\n";
         const res = await fetch("/sync-library", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ force: false }) });
@@ -599,9 +524,9 @@
         while (true) { const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); let lines = buffer.split("\n"); buffer = lines.pop(); for (let line of lines) if (line.trim()) output.textContent += line + "\n"; }
         if (buffer.trim()) output.textContent += buffer + "\n"; output.textContent += "\nSync complete.";
       }
-      async function getMetadata() {
-        const res = await fetch("/library/metadata", { headers: { "session_token": sessionToken } });
-        metadataOutput.textContent = res.ok ? JSON.stringify(await res.json(), null, 2) : `Failed: ${res.statusText}`;
+      async function getLibrary() {
+        const res = await fetch("/library", { headers: { "session_token": sessionToken } });
+        libraryOutput.textContent = res.ok ? JSON.stringify(await res.json(), null, 2) : `Failed: ${res.statusText}`;
       }
 
       // ---------------- ACCOUNT SETTINGS ----------------

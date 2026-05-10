@@ -59,7 +59,7 @@ def sync_all(
   ).fetchall()
 
   if not playlists:
-    return {"ok": True, "message": "No linked playlists"}
+    return {"ok": True, "message": "No playlists"}
 
   # -------------------------------------------------
   # 2. Fetch all tracks from each playlist (normalized)

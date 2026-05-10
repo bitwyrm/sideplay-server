@@ -19,7 +19,6 @@ This project is organized into four logical layers while keeping current file la
 - `helpers/setup.py`: shared config constants and Redis JSON helpers.
 
 ## Runtime topology
-- API service (`core.py`) is source of truth for identity + metadata.
+- API service (`core.py`) is source of truth for identity, library state, and playlist state.
 - Media service (`media_service.py`) is responsible for ensuring audio and thumbnail files exist.
 - Redis is cache only; SQLite is authoritative.
-

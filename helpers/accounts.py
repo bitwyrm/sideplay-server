@@ -5,7 +5,7 @@ from helpers.db import get_db
 from helpers.setup import OPEN_ACCESS, SESSION_HOURS
 import bcrypt
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -18,8 +18,8 @@ class LoginRequest(BaseModel):
 class SignupRequest(BaseModel):
   """Request body for user signup containing username and password."""
 
-  username: str
-  password: str
+  username: str = Field(min_length=3, max_length=64)
+  password: str = Field(min_length=8, max_length=128)
 
 
 class ResetUsernameRequest(BaseModel):
@@ -125,7 +125,14 @@ def require_user_or_open_access(request: Request, db=Depends(get_db)) -> str | N
 router = APIRouter(tags=["accounts"])
 
 
-@router.post("/sign-up")
+@router.post(
+  "/sign-up",
+  summary="Create a user account",
+  description=(
+    "Creates a new account with validated defaults: username length 3-64 "
+    "characters and password length 8-128 characters."
+  ),
+)
 def sign_up(data: SignupRequest, db=Depends(get_db)) -> dict[str, bool]:
   """
   Sign up a new user.
@@ -140,9 +147,13 @@ def sign_up(data: SignupRequest, db=Depends(get_db)) -> dict[str, bool]:
   Returns:
     dict: {"ok": True} on success.
   """
+  username = data.username.strip()
+  if not username:
+    raise HTTPException(422, "Username cannot be blank")
+
   if db.execute(
     "SELECT 1 FROM users WHERE username = ?",
-    (data.username,),
+    (username,),
   ).fetchone():
     raise HTTPException(400, "Username already exists")
 
@@ -150,7 +161,7 @@ def sign_up(data: SignupRequest, db=Depends(get_db)) -> dict[str, bool]:
 
   db.execute(
     "INSERT INTO users (user_id, username, password_hash) VALUES (?, ?, ?)",
-    (user_id, data.username, hash_password(data.password)),
+    (user_id, username, hash_password(data.password)),
   )
   db.commit()
   return {"ok": True}
