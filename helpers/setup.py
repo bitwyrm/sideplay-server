@@ -5,6 +5,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 DATA_ROOT = os.path.abspath(os.environ.get("SIDEPLAY_DATA_ROOT", "./data"))
+SPOTIFY_CREDENTIALS_FILE = os.environ.get(
+  "SPOTIFY_CREDENTIALS_FILE", "spotify-credentials.json"
+)
+GOOGLE_CREDENTIALS_FILE = os.environ.get(
+  "GOOGLE_CREDENTIALS_FILE", "google-credentials.json"
+)
+YT_HEADERS_FILE = os.environ.get("YT_HEADERS_FILE", "headers.json")
+YTDLP_COOKIES_FILE = os.environ.get("YTDLP_COOKIES_FILE", "cookies.txt")
 
 DB_PATH = os.path.join(DATA_ROOT, "sideplay.sqlite")
 MEDIA_DIR = os.path.join(DATA_ROOT, "media")
@@ -20,7 +28,7 @@ YOUTUBE_SCOPES = [
   "openid",
 ]
 
-with open("spotify-credentials.json") as f:
+with open(SPOTIFY_CREDENTIALS_FILE) as f:
   SPOTIFY_CREDS = json.load(f)
 
 SPOTIFY_CLIENT_ID = SPOTIFY_CREDS["client_id"]

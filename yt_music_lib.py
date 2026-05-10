@@ -21,14 +21,19 @@ from typing import Dict, List, Optional
 import redis
 import requests
 from ytmusicapi import YTMusic
-from helpers.setup import GOOGLE_OAUTH_DIR, NORMALIZE_MAP_PATH
+from helpers.setup import (
+  GOOGLE_CREDENTIALS_FILE,
+  GOOGLE_OAUTH_DIR,
+  NORMALIZE_MAP_PATH,
+  YT_HEADERS_FILE,
+)
 
 # -------------------------------------------------------------------
 # Paths and configuration
 # -------------------------------------------------------------------
 
-headers_path = "headers.json"
-google_creds_path = "google-credentials.json"
+headers_path = YT_HEADERS_FILE
+google_creds_path = GOOGLE_CREDENTIALS_FILE
 
 YOUTUBE_API_BASE = "https://www.googleapis.com/youtube/v3"
 OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -56,7 +61,15 @@ def get_public_client() -> YTMusic:
   """
   global _public_client
   if _public_client is None:
-    _public_client = YTMusic(headers_path)
+    try:
+      if Path(headers_path).exists():
+        _public_client = YTMusic(headers_path)
+      else:
+        _public_client = YTMusic()
+    except Exception:
+      # If provided auth file is not a browser headers export (for example OAuth JSON),
+      # fall back to an anonymous client so public search still works.
+      _public_client = YTMusic()
   return _public_client
 
 

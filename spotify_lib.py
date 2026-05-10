@@ -11,7 +11,7 @@ from helpers.setup import SPOTIFY_OAUTH_DIR
 # Paths and configuration
 # -------------------------------------------------------------------
 
-CREDENTIALS_FILE = "spotify-credentials.json"
+CREDENTIALS_FILE = os.environ.get("SPOTIFY_CREDENTIALS_FILE", "spotify-credentials.json")
 SPOTIFY_DETAILS_TTL = 30 * 24 * 3600  # 30 days
 
 # -------------------------------------------------------------------

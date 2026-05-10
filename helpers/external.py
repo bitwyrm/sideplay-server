@@ -12,6 +12,7 @@ from google.auth.transport.requests import Request as GoogleRequest
 from helpers.db import get_db
 from helpers.accounts import get_user_from_session, require_user
 from helpers.setup import (
+  GOOGLE_CREDENTIALS_FILE,
   GOOGLE_OAUTH_DIR,
   SPOTIFY_CLIENT_ID,
   SPOTIFY_CLIENT_SECRET,
@@ -142,7 +143,7 @@ def youtube_start(token: str, db=Depends(get_db)) -> RedirectResponse:
     raise HTTPException(401)
 
   flow = Flow.from_client_secrets_file(
-    "google-credentials.json",
+    GOOGLE_CREDENTIALS_FILE,
     scopes=YOUTUBE_SCOPES,
     redirect_uri=YOUTUBE_REDIRECT,
   )
@@ -179,7 +180,7 @@ def youtube_callback(code: str, state: str, db=Depends(get_db)) -> RedirectRespo
     raise HTTPException(401)
 
   flow = Flow.from_client_secrets_file(
-    "google-credentials.json",
+    GOOGLE_CREDENTIALS_FILE,
     scopes=YOUTUBE_SCOPES,
     redirect_uri=YOUTUBE_REDIRECT,
   )

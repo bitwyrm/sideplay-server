@@ -14,7 +14,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from helpers.setup import MEDIA_DIR, THUMB_DIR
+from helpers.setup import MEDIA_DIR, THUMB_DIR, YTDLP_COOKIES_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ async def download_and_convert(youtube_id: str) -> None:
         "--convert-thumbnails",
         "webp",
         "--cookies",
-        "cookies.txt",
+        YTDLP_COOKIES_FILE,
         "--no-playlist",
         "--quiet",
         "-o",
