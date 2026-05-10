@@ -1,0 +1,6 @@
+__pycache__
+venv
+.cache
+google-credentials.json
+spotify-credentials.json
+data/

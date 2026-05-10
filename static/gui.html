@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Sideplay</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --border: #1f2933;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #020617;
+      font-family: system-ui, sans-serif;
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 24px;
+      font-size: 2rem;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.25rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .col {
+      flex: 1;
+      min-width: 260px;
+    }
+
+    label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #020617;
+      color: var(--text);
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    button.secondary {
+      background: #1f2937;
+    }
+
+    button.secondary:hover {
+      background: #374151;
+    }
+
+    pre {
+      background: #020617;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 400px;
+      overflow: auto;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .status {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🎧 Sideplay</h1>
+
+    <!-- AUTH -->
+    <div class="row">
+      <div class="card col">
+        <h2>Login</h2>
+        <label>Username</label>
+        <input id="loginUsername" />
+        <label>Password</label>
+        <input id="loginPassword" type="password" />
+        <button onclick="login()">Login</button>
+        <div class="status" id="loginStatus"></div>
+      </div>
+      <div class="card col">
+        <h2>Sign Up</h2>
+        <label>Username</label>
+        <input id="signupUsername" />
+        <label>Password</label>
+        <input id="signupPassword" type="password" />
+        <button class="secondary" onclick="signup()">Create Account</button>
+        <div class="status" id="signupStatus"></div>
+      </div>
+    </div>
+
+    <!-- LOGOUT -->
+    <div class="card">
+      <h2>Logout</h2>
+      <button onclick="logout()">Logout</button>
+      <div class="status" id="logoutStatus"></div>
+    </div>
+
+    <!-- ACCOUNT SETTINGS -->
+    <div class="card">
+      <h2>Account Settings</h2>
+
+      <div class="row">
+        <button class="secondary" onclick="resetUsername()">
+          Reset Username
+        </button>
+        <button class="secondary" onclick="resetPassword()">
+          Reset Password
+        </button>
+      </div>
+
+      <p class="status">
+        You will be prompted to enter the required information.
+      </p>
+    </div>
+
+    <!-- DELETE ACCOUNT -->
+    <div class="card">
+      <h2 style="color:#f87171;">Delete Account</h2>
+      <p class="status">
+        This will permanently delete your account, sessions, playlists, and library.
+        <br /><strong>This action cannot be undone.</strong>
+      </p>
+      <button
+        onclick="deleteAccount()"
+        style="background:#dc2626;"
+        onmouseover="this.style.background='#b91c1c'"
+        onmouseout="this.style.background='#dc2626'"
+      >
+        Delete My Account
+      </button>
+    </div>
+
+    <!-- OAUTH -->
+    <div class="card">
+      <h2>Connect Account</h2>
+      <div class="row">
+        <button onclick="linkSpotify()">Link Spotify</button>
+        <button onclick="linkYouTube()">Link YouTube</button>
+      </div>
+    </div>
+
+    <!-- CONNECTED ACCOUNTS -->
+    <div class="card">
+      <h2>Connected Accounts</h2>
+      <button onclick="loadAccounts()">Refresh</button>
+      <pre id="accountsOutput"></pre>
+    </div>
+
+    <!-- UNLINK ACCOUNT -->
+    <div class="card">
+      <h2>Unlink Account</h2>
+      <label>Provider</label>
+      <select id="unlinkProvider">
+        <option value="spotify">Spotify</option>
+        <option value="youtube">YouTube</option>
+      </select>
+      <label>External ID</label>
+      <input id="unlinkExternalId" placeholder="Account external ID" />
+      <button onclick="unlinkAccount()">Unlink</button>
+      <pre id="unlinkResult"></pre>
+    </div>
+
+    <!-- MANUAL ADD / REMOVE TRACK -->
+    <div class="card">
+      <h2>Manage Track</h2>
+      <label>Provider</label>
+      <select id="manualProvider">
+        <option value="youtube">YouTube</option>
+        <option value="spotify">Spotify</option>
+      </select>
+      <label>Track ID</label>
+      <input id="manualId" placeholder="Track ID" />
+      <div class="row">
+        <button onclick="addManualTrack()">Add Track</button>
+        <button class="secondary" onclick="removeTrack()">Remove Track</button>
+      </div>
+      <pre id="manualResult"></pre>
+    </div>
+
+    <!-- SEARCH -->
+    <div class="card">
+      <h2>Search Songs</h2>
+      <input id="songQuery" placeholder="Song or artist" />
+      <button onclick="searchSongs()">Search</button>
+      <pre id="songResults"></pre>
+    </div>
+    <div class="card">
+      <h2>Search Playlists</h2>
+      <input id="playlistQuery" placeholder="Playlist name" />
+      <button onclick="searchPlaylists()">Search</button>
+      <pre id="playlistResults"></pre>
+    </div>
+
+    <!-- LINK PLAYLIST -->
+    <div class="card">
+      <h2>Link Playlist</h2>
+      <label>Provider</label>
+      <select id="linkProvider">
+        <option value="spotify">Spotify</option>
+        <option value="youtube">YouTube</option>
+      </select>
+      <label>Account ID / Sub</label>
+      <input id="linkAccountId" placeholder="Spotify ID or YouTube sub" />
+      <label>Playlist ID</label>
+      <input id="linkPlaylistId" placeholder="Playlist ID" />
+      <button onclick="linkPlaylist()">Link Playlist</button>
+      <pre id="linkResult"></pre>
+    </div>
+
+    <!-- PLAYLISTS -->
+    <div class="card">
+      <h2>My Playlists</h2>
+      <button onclick="listPlaylists()">Load</button>
+      <pre id="myPlaylists"></pre>
+    </div>
+
+    <!-- LOCAL PLAYLIST MANAGEMENT -->
+    <div class="card">
+      <h2>Local Playlist</h2>
+      <label>Name</label>
+      <input id="localPlaylistName" placeholder="Playlist name" />
+      <label>Tracks (comma-separated)</label>
+      <input id="localPlaylistTracks" placeholder="Track IDs" />
+      <div class="row">
+        <button onclick="createLocalPlaylist()">Create</button>
+        <button class="secondary" onclick="updateLocalPlaylist()">Update</button>
+        <button class="secondary" onclick="deleteLocalPlaylist()">Delete</button>
+      </div>
+      <pre id="localPlaylistResult"></pre>
+    </div>
+
+    <!-- DELETE PLAYLIST -->
+    <div class="card">
+      <h2>Delete Playlist</h2>
+      <label>Playlist ID</label>
+      <input id="deletePlaylistId" placeholder="Playlist ID" />
+      <label><input type="checkbox" id="cascadeDelete" /> Cascade</label>
+      <button onclick="deletePlaylist()">Delete</button>
+      <pre id="deletePlaylistResult"></pre>
+    </div>
+
+    <!-- SYNC ALL -->
+    <div class="card">
+      <h2>Sync All Playlists</h2>
+      <button onclick="syncAll()">Start Sync</button>
+      <pre id="syncOutput"></pre>
+    </div>
+
+    <!-- GET METADATA -->
+    <div class="card">
+      <h2>Get Metadata</h2>
+      <button onclick="getMetadata()">Load Metadata</button>
+      <pre id="metadataOutput"></pre>
+    </div>
+
+    <!-- FETCH TRACK MEDIA -->
+    <div class="card">
+      <h2>Fetch Track Media</h2>
+      <label>YouTube ID</label>
+      <input id="mediaYoutubeId" placeholder="YouTube video ID" />
+      <button onclick="fetchTrackMedia()">Play Audio</button>
+      <audio id="mediaPlayer" controls style="width: 100%; margin-top: 8px;"></audio>
+    </div>
+
+    <!-- FETCH THUMBNAIL -->
+    <div class="card">
+      <h2>Fetch Thumbnail</h2>
+      <label>YouTube ID</label>
+      <input id="thumbYoutubeId" placeholder="YouTube video ID" />
+      <button onclick="fetchThumbnail()">Show Thumbnail</button>
+      <img id="thumbPreview" style="max-width: 100%; margin-top: 8px; border-radius: 8px; display: block;" />
+    </div>
+
+    <!-- WHITELIST MANAGEMENT -->
+    <div class="card">
+      <h2>User Whitelist</h2>
+      <label>YouTube ID</label>
+      <input id="whitelistYoutubeId" placeholder="YouTube video ID" />
+      <div class="row">
+        <button onclick="addToWhitelist()">Add to Whitelist</button>
+        <button class="secondary" onclick="removeFromWhitelist()">Remove from Whitelist</button>
+      </div>
+      <pre id="whitelistResult"></pre>
+    </div>
+
+    <div class="card">
+      <h2>Current Whitelist</h2>
+      <button onclick="loadWhitelist()">Refresh</button>
+      <pre id="whitelistOutput"></pre>
+    </div>
+
+    <script>
+      let sessionToken = localStorage.getItem("session-token");
+
+      // ---------------- AUTH ----------------
+      async function signup() {
+        signupStatus.textContent = "Creating…";
+        const res = await fetch("/sign-up", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: signupUsername.value, password: signupPassword.value }) });
+        signupStatus.textContent = res.ok ? "Account created" : "Signup failed";
+      }
+      async function login() {
+        loginStatus.textContent = "Logging in…";
+        const res = await fetch("/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: loginUsername.value, password: loginPassword.value }) });
+        if (!res.ok) { loginStatus.textContent = "Login failed"; return; }
+        const data = await res.json(); sessionToken = data.session_token; localStorage.setItem("session-token", sessionToken);
+        loginStatus.textContent = "Logged in ✔";
+      }
+      async function logout() {
+        if (!sessionToken) return alert("Login first");
+        const res = await fetch("/logout", { method: "POST", headers: { "session_token": sessionToken } });
+        logoutStatus.textContent = res.ok ? "Logged out ✔" : "Logout failed";
+        if (res.ok) { localStorage.removeItem("session-token"); sessionToken = null; }
+      }
+
+      // ---------------- OAUTH ----------------
+      function linkSpotify() { if (!sessionToken) return alert("Login first"); window.location = `/oauth/spotify/init?token=${sessionToken}`; }
+      function linkYouTube() { if (!sessionToken) return alert("Login first"); window.location = `/oauth/youtube/init?token=${sessionToken}`; }
+
+      // ---------------- ACCOUNTS ----------------
+      async function loadAccounts() {
+        if (!sessionToken) return alert("Login first");
+        const res = await fetch("/external-accounts", { headers: { "session_token": sessionToken } });
+        accountsOutput.textContent = res.ok ? JSON.stringify((await res.json()).accounts, null, 2) : "Failed to load accounts";
+      }
+      async function unlinkAccount() {
+        const provider = unlinkProvider.value, external_id = unlinkExternalId.value;
+        const res = await fetch("/external-accounts/unlink", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ provider, external_id }) });
+        unlinkResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      // ---------------- TRACKS ----------------
+      async function addManualTrack() {
+        const res = await fetch("/library/add-track", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ provider: manualProvider.value, track_id: manualId.value }) });
+        manualResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+      async function removeTrack() {
+        const res = await fetch("/library/remove-track", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ youtube_id: manualId.value }) });
+        manualResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      // ---------------- SEARCH ----------------
+      async function searchSongs() {
+        const res = await fetch("/search/tracks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: songQuery.value }) });
+        songResults.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+      async function searchPlaylists() {
+        const res = await fetch("/search/playlists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: playlistQuery.value }) });
+        playlistResults.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      // ---------------- PLAYLISTS ----------------
+      async function linkPlaylist() {
+        const res = await fetch("/playlists/link", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ provider: linkProvider.value, account_id: linkAccountId.value || null, sub: linkAccountId.value || null, playlist_id: linkPlaylistId.value }) });
+        linkResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+      async function listPlaylists() {
+        const res = await fetch("/playlists", { headers: { "session_token": sessionToken } });
+        myPlaylists.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      async function createLocalPlaylist() {
+        const res = await fetch("/playlists/local/create", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ name: localPlaylistName.value, tracks: localPlaylistTracks.value.split(",").map(t => t.trim()).filter(Boolean) }) });
+        localPlaylistResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+      async function updateLocalPlaylist() {
+        const playlist_id = localPlaylistName.value;
+        const res = await fetch(`/playlists/local/${playlist_id}/update`, { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ tracks: localPlaylistTracks.value.split(",").map(t => t.trim()).filter(Boolean) }) });
+        localPlaylistResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+      async function deleteLocalPlaylist() {
+        const playlist_id = localPlaylistName.value;
+        const res = await fetch(`/playlists/local/${playlist_id}`, { method: "DELETE", headers: { "session_token": sessionToken } });
+        localPlaylistResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      async function deletePlaylist() {
+        const playlist_id = deletePlaylistId.value;
+        const cascade = cascadeDelete.checked;
+        const res = await fetch(`/playlists/${playlist_id}?cascade=${cascade}`, { method: "DELETE", headers: { "session_token": sessionToken } });
+        deletePlaylistResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      // ---------------- SYNC / METADATA ----------------
+      async function syncAll() {
+        const output = syncOutput; output.textContent = "Starting sync…\n";
+        const res = await fetch("/sync-library", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ force: false }) });
+        if (!res.ok) { output.textContent += `Failed: ${res.statusText}`; return; }
+        const reader = res.body.getReader(), decoder = new TextDecoder("utf-8"); let buffer = "";
+        while (true) { const { done, value } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); let lines = buffer.split("\n"); buffer = lines.pop(); for (let line of lines) if (line.trim()) output.textContent += line + "\n"; }
+        if (buffer.trim()) output.textContent += buffer + "\n"; output.textContent += "\nSync complete.";
+      }
+      async function getMetadata() {
+        const res = await fetch("/library/metadata", { headers: { "session_token": sessionToken } });
+        metadataOutput.textContent = res.ok ? JSON.stringify(await res.json(), null, 2) : `Failed: ${res.statusText}`;
+      }
+
+      // ---------------- ACCOUNT SETTINGS ----------------
+      async function resetUsername() {
+        const new_username = prompt("Enter new username:");
+        if (!new_username) return;
+        const res = await fetch("/account/reset-username", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ new_username }) });
+        alert(JSON.stringify(await res.json(), null, 2));
+      }
+      async function resetPassword() {
+        const old_password = prompt("Enter old password:");
+        const new_password = prompt("Enter new password:");
+        if (!old_password || !new_password) return;
+        const res = await fetch("/account/reset-password", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ old_password, new_password }) });
+        alert(JSON.stringify(await res.json(), null, 2));
+      }
+      async function deleteAccount() {
+        if (!confirm("Delete your account? This is irreversible.")) return;
+        const res = await fetch("/account", { method: "DELETE", headers: { "session_token": sessionToken } });
+        alert(JSON.stringify(await res.json(), null, 2));
+        if (res.ok) { localStorage.removeItem("session-token"); sessionToken = null; }
+      }
+
+      // ENTER key handling
+      document.querySelectorAll("input").forEach(input => {
+        input.addEventListener("keypress", e => {
+          if (e.key === "Enter") { e.preventDefault(); const btn = input.closest(".card").querySelector("button:not(.secondary)"); if (btn) btn.click(); }
+        });
+      });
+
+      // ---------------- MEDIA / THUMBNAIL ----------------
+      async function fetchTrackMedia() {
+        const youtube_id = mediaYoutubeId.value.trim();
+        if (!youtube_id) return alert("Enter a YouTube ID");
+
+        try {
+          const res = await fetch(`/tracks/${youtube_id}/media`, {
+            headers: { "session_token": sessionToken }
+          });
+
+          if (!res.ok) throw new Error("Failed to fetch media");
+
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+
+          const player = mediaPlayer;
+          player.src = url;
+          player.load();
+          player.play();
+        } catch (err) {
+          alert("Error fetching audio: " + err);
+        }
+      }
+
+      async function fetchThumbnail() {
+        const youtube_id = thumbYoutubeId.value.trim();
+        if (!youtube_id) return alert("Enter a YouTube ID");
+
+        try {
+          const res = await fetch(`/tracks/${youtube_id}/thumbnail`, {
+            headers: { "session_token": sessionToken }
+          });
+
+          if (!res.ok) throw new Error("Failed to fetch thumbnail");
+
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+
+          const img = thumbPreview;
+          img.src = url;
+        } catch (err) {
+          alert("Error fetching thumbnail: " + err);
+        }
+      }
+
+      // ---------------- WHITELIST ----------------
+      async function addToWhitelist() {
+        const youtube_id = whitelistYoutubeId.value.trim();
+        if (!youtube_id) return alert("Enter a YouTube ID");
+        const res = await fetch("/whitelist/add", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "session_token": sessionToken
+          },
+          body: JSON.stringify({ youtube_id })
+        });
+        whitelistResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      async function removeFromWhitelist() {
+        const youtube_id = whitelistYoutubeId.value.trim();
+        if (!youtube_id) return alert("Enter a YouTube ID");
+        const res = await fetch("/whitelist/remove", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "session_token": sessionToken
+          },
+          body: JSON.stringify({ youtube_id })
+        });
+        whitelistResult.textContent = JSON.stringify(await res.json(), null, 2);
+      }
+
+      async function loadWhitelist() {
+        const res = await fetch("/whitelist", {
+          headers: { "session_token": sessionToken }
+        });
+        whitelistOutput.textContent = res.ok ? JSON.stringify(await res.json(), null, 2) : "Failed to load whitelist";
+      }
+    </script>
+  </div>
+</body>
+
+</html>
