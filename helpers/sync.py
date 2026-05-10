@@ -264,14 +264,24 @@ def get_playlist_tracks_normalized(
   tracks = redis_get_json(cache_key)
 
   if tracks is None:
-    if provider == "youtube":
-      tracks = yt_music_lib.get_playlist_songs(
-        playlist["external_id"], playlist["playlist_id"]
+    try:
+      if provider == "youtube":
+        tracks = yt_music_lib.get_playlist_songs(
+          playlist["external_id"], playlist["playlist_id"]
+        )
+      else:  # spotify
+        tracks = spotify_lib.get_playlist_songs(
+          playlist["external_id"], playlist["playlist_id"]
+        )
+    except Exception as exc:
+      logger.warning(
+        "event=playlist_tracks_provider_error provider=%s playlist_id=%s external_id=%s error=%s",
+        provider,
+        playlist["playlist_id"],
+        playlist.get("external_id"),
+        exc,
       )
-    else:  # spotify
-      tracks = spotify_lib.get_playlist_songs(
-        playlist["external_id"], playlist["playlist_id"]
-      )
+      tracks = []
     redis_set_json(cache_key, tracks, ttl=PLAYLIST_CACHE_TTL)
 
   normalized: List[dict] = []

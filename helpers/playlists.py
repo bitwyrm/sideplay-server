@@ -1,5 +1,6 @@
 import json
 import secrets
+import logging
 from typing import Optional
 
 import spotify_lib
@@ -44,6 +45,7 @@ class UpdateLocalPlaylistRequest(BaseModel):
 
 
 router = APIRouter(tags=["playlists"])
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------
 # LINK PLAYLIST
@@ -78,12 +80,21 @@ def link_playlist(
     raise HTTPException(400, "Missing account identifier (sub or account_id)")
 
   # Fetch playlist info from provider
-  if provider == "spotify":
-    playlists = spotify_lib.get_user_playlists(external_id)
-    playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
-  else:
-    playlists = yt_music_lib.get_user_playlists(external_id)
-    playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
+  try:
+    if provider == "spotify":
+      playlists = spotify_lib.get_user_playlists(external_id)
+      playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
+    else:
+      playlists = yt_music_lib.get_user_playlists(external_id)
+      playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
+  except Exception as exc:
+    logger.warning(
+      "event=link_playlist_provider_error provider=%s external_id=%s error=%s",
+      provider,
+      external_id,
+      exc,
+    )
+    raise HTTPException(502, f"{provider} provider unavailable")
 
   if not playlist_info:
     raise HTTPException(404, "Playlist not found for this account")
@@ -129,10 +140,28 @@ def playlists(user_id: str = Depends(require_user), db=Depends(get_db)) -> list[
   out = []
   for acc in rows:
     if acc["provider"] == "spotify":
-      for p in spotify_lib.get_user_playlists(acc["external_id"]):
+      try:
+        playlists = spotify_lib.get_user_playlists(acc["external_id"])
+      except Exception as exc:
+        logger.warning(
+          "event=list_playlists_provider_error provider=spotify external_id=%s error=%s",
+          acc["external_id"],
+          exc,
+        )
+        playlists = []
+      for p in playlists:
         out.append({**p, "provider": "spotify"})
     if acc["provider"] == "youtube":
-      for p in yt_music_lib.get_user_playlists(acc["external_id"]):
+      try:
+        playlists = yt_music_lib.get_user_playlists(acc["external_id"])
+      except Exception as exc:
+        logger.warning(
+          "event=list_playlists_provider_error provider=youtube external_id=%s error=%s",
+          acc["external_id"],
+          exc,
+        )
+        playlists = []
+      for p in playlists:
         out.append({**p, "provider": "youtube"})
 
   return out
