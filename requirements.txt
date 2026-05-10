@@ -21,6 +21,7 @@ requests==2.32.5
 requests-oauthlib==2.0.0
 rsa==4.9.1
 spotipy==2.25.2
+spotifyscraper==2.0.0
 starlette==0.50.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0

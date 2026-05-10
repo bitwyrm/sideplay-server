@@ -1,11 +1,18 @@
 import json
 import os
 import redis
-from typing import Optional
+import logging
+from typing import Any, Optional
 
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 from helpers.setup import SPOTIFY_OAUTH_DIR
+try:
+  from spotify_scraper import SpotifyClient as SpotifyScraperClient
+except Exception:
+  SpotifyScraperClient = None
+
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------
 # Paths and configuration
@@ -28,6 +35,104 @@ def redis_get_json(key: str) -> Optional[dict]:
   if not data:
     return None
   return json.loads(data)
+
+
+def _spotify_track_url(track_id: str) -> str:
+  return f"https://open.spotify.com/track/{track_id}"
+
+
+def _spotify_playlist_url(playlist_id: str) -> str:
+  return f"https://open.spotify.com/playlist/{playlist_id}"
+
+
+def _parse_scraper_track(item: dict[str, Any]) -> Optional[dict]:
+  if not item:
+    return None
+
+  # Some scraper responses wrap the track in {"track": {...}}.
+  track = item.get("track") if isinstance(item, dict) else None
+  if isinstance(track, dict):
+    item = track
+
+  track_id = item.get("id")
+  title = item.get("name") or item.get("title")
+  raw_artists = item.get("artists") or []
+  artists: list[str] = []
+  for artist in raw_artists:
+    if isinstance(artist, dict):
+      name = artist.get("name")
+      if name:
+        artists.append(name)
+    elif isinstance(artist, str):
+      artists.append(artist)
+
+  album = ""
+  raw_album = item.get("album")
+  if isinstance(raw_album, dict):
+    album = raw_album.get("name") or ""
+  elif isinstance(raw_album, str):
+    album = raw_album
+
+  if not title or not artists:
+    return None
+
+  return {
+    "track_id": track_id,
+    "title": title,
+    "artists": artists,
+    "album": album,
+  }
+
+
+def _scraper_client() -> Optional[Any]:
+  if SpotifyScraperClient is None:
+    return None
+  try:
+    return SpotifyScraperClient()
+  except Exception as exc:
+    logger.warning("event=spotify_scraper_client_init_error error=%s", exc)
+    return None
+
+
+def _fallback_get_song_details(track_id: str) -> Optional[dict]:
+  client = _scraper_client()
+  if client is None:
+    return None
+
+  try:
+    track = client.get_track_info(_spotify_track_url(track_id))
+  except Exception as exc:
+    logger.warning(
+      "event=spotify_scraper_track_details_error track_id=%s error=%s", track_id, exc
+    )
+    return None
+
+  parsed = _parse_scraper_track(track or {})
+  if not parsed:
+    return None
+  return {"title": parsed["title"], "artists": parsed["artists"]}
+
+
+def _fallback_get_playlist_songs(playlist_id: str) -> list:
+  client = _scraper_client()
+  if client is None:
+    return []
+
+  try:
+    playlist = client.get_playlist_info(_spotify_playlist_url(playlist_id))
+  except Exception as exc:
+    logger.warning(
+      "event=spotify_scraper_playlist_error playlist_id=%s error=%s", playlist_id, exc
+    )
+    return []
+
+  items = ((playlist or {}).get("tracks") or {}).get("items") or []
+  out = []
+  for item in items:
+    parsed = _parse_scraper_track(item)
+    if parsed:
+      out.append(parsed)
+  return out
 
 # -------------------------------------------------------------------
 # Credentials
@@ -131,8 +236,11 @@ def get_song_details(track_id: str, client: Optional[Spotify] = None) -> Optiona
   client = client or get_public_client()
   try:
     track = client.track(track_id)
-  except Exception:
-    return None
+  except Exception as exc:
+    logger.warning(
+      "event=spotify_api_track_details_error track_id=%s error=%s", track_id, exc
+    )
+    return _fallback_get_song_details(track_id)
 
   if not track:
     return None
@@ -177,10 +285,28 @@ def get_playlist_songs(user_id: str, playlist_id: str) -> list:
   """
   Returns ALL tracks from a private or collaborative playlist.
   """
-  client = get_private_client(user_id)
+  try:
+    client = get_private_client(user_id)
+  except Exception as exc:
+    logger.warning(
+      "event=spotify_api_private_client_error user_id=%s playlist_id=%s error=%s",
+      user_id,
+      playlist_id,
+      exc,
+    )
+    return _fallback_get_playlist_songs(playlist_id)
   tracks = []
 
-  results = client.playlist_items(playlist_id, limit=100)
+  try:
+    results = client.playlist_items(playlist_id, limit=100)
+  except Exception as exc:
+    logger.warning(
+      "event=spotify_api_playlist_items_error user_id=%s playlist_id=%s error=%s",
+      user_id,
+      playlist_id,
+      exc,
+    )
+    return _fallback_get_playlist_songs(playlist_id)
   while True:
     for item in results["items"]:
       track = item.get("track")
@@ -198,7 +324,16 @@ def get_playlist_songs(user_id: str, playlist_id: str) -> list:
 
     if not results["next"]:
       break
-    results = client.next(results)
+    try:
+      results = client.next(results)
+    except Exception as exc:
+      logger.warning(
+        "event=spotify_api_playlist_page_error user_id=%s playlist_id=%s error=%s",
+        user_id,
+        playlist_id,
+        exc,
+      )
+      return _fallback_get_playlist_songs(playlist_id)
 
   return tracks
 
@@ -209,7 +344,15 @@ def get_playlist_songs_public(playlist_id: str) -> list:
   client = get_public_client()
   tracks = []
 
-  results = client.playlist_items(playlist_id, limit=100)
+  try:
+    results = client.playlist_items(playlist_id, limit=100)
+  except Exception as exc:
+    logger.warning(
+      "event=spotify_api_public_playlist_items_error playlist_id=%s error=%s",
+      playlist_id,
+      exc,
+    )
+    return _fallback_get_playlist_songs(playlist_id)
   while True:
     for item in results["items"]:
       track = item.get("track")
@@ -227,6 +370,14 @@ def get_playlist_songs_public(playlist_id: str) -> list:
 
     if not results["next"]:
       break
-    results = client.next(results)
+    try:
+      results = client.next(results)
+    except Exception as exc:
+      logger.warning(
+        "event=spotify_api_public_playlist_page_error playlist_id=%s error=%s",
+        playlist_id,
+        exc,
+      )
+      return _fallback_get_playlist_songs(playlist_id)
 
   return tracks
