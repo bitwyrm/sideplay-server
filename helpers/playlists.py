@@ -65,7 +65,7 @@ def link_playlist(
     db: Database connection.
 
   Raises:
-    HTTPException 400: Invalid provider or missing account ID.
+    HTTPException 400: Invalid provider.
     HTTPException 404: Playlist not found for the given account.
 
   Returns:
@@ -76,28 +76,36 @@ def link_playlist(
     raise HTTPException(400, "Invalid provider")
 
   external_id = data.sub if provider == "youtube" else data.account_id
-  if not external_id:
-    raise HTTPException(400, "Missing account identifier (sub or account_id)")
+  playlist_info = None
 
-  # Fetch playlist info from provider
-  try:
+  # If caller provides account identifier, prefer user-owned playlist discovery.
+  if external_id:
+    try:
+      if provider == "spotify":
+        playlists = spotify_lib.get_user_playlists(external_id)
+        playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
+      else:
+        playlists = yt_music_lib.get_user_playlists(external_id)
+        playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
+    except Exception as exc:
+      logger.warning(
+        "event=link_playlist_provider_error provider=%s external_id=%s error=%s",
+        provider,
+        external_id,
+        exc,
+      )
+      raise HTTPException(502, f"{provider} provider unavailable")
+  else:
+    # Public link mode: no account identifier needed.
     if provider == "spotify":
-      playlists = spotify_lib.get_user_playlists(external_id)
-      playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
+      playlist_info = spotify_lib.get_playlist_info_public(data.playlist_id)
     else:
-      playlists = yt_music_lib.get_user_playlists(external_id)
-      playlist_info = next((p for p in playlists if p["id"] == data.playlist_id), None)
-  except Exception as exc:
-    logger.warning(
-      "event=link_playlist_provider_error provider=%s external_id=%s error=%s",
-      provider,
-      external_id,
-      exc,
-    )
-    raise HTTPException(502, f"{provider} provider unavailable")
+      playlist_info = yt_music_lib.get_playlist_info_public(data.playlist_id)
 
   if not playlist_info:
-    raise HTTPException(404, "Playlist not found for this account")
+    if external_id:
+      raise HTTPException(404, "Playlist not found for this account")
+    raise HTTPException(404, "Public playlist not found")
 
   playlist_name = playlist_info.get("title", "Unnamed Playlist")
 

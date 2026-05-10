@@ -1,9 +1,10 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse, JSONResponse
 import os
 import hashlib
 from email.utils import formatdate
 from helpers.setup import MEDIA_DIR, THUMB_DIR
+from helpers.accounts import require_user_or_open_access
 
 router = APIRouter(tags=["media"])
 
@@ -20,7 +21,9 @@ def thumb_path(youtube_id: str) -> str:
 # Endpoints
 # -----------------------------
 @router.get("/tracks/{youtube_id}/media", response_model=None)
-def serve_track(youtube_id: str) -> FileResponse | JSONResponse:
+def serve_track(
+  youtube_id: str, _auth: str | None = Depends(require_user_or_open_access)
+) -> FileResponse | JSONResponse:
   """
   Serve a track's media file (.webm) with caching headers.
 
@@ -57,7 +60,9 @@ def serve_track(youtube_id: str) -> FileResponse | JSONResponse:
 
 
 @router.get("/tracks/{youtube_id}/thumbnail", response_model=None)
-def serve_thumbnail(youtube_id: str) -> FileResponse | JSONResponse:
+def serve_thumbnail(
+  youtube_id: str, _auth: str | None = Depends(require_user_or_open_access)
+) -> FileResponse | JSONResponse:
   """
   Serve a track's thumbnail (.webp).
 

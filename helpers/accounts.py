@@ -2,7 +2,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from helpers.db import get_db
-from helpers.setup import SESSION_HOURS
+from helpers.setup import OPEN_ACCESS, SESSION_HOURS
 import bcrypt
 
 from pydantic import BaseModel
@@ -110,6 +110,16 @@ def require_user(request: Request, db=Depends(get_db)) -> str:
     raise HTTPException(401, "Invalid or expired session")
 
   return user_id
+
+
+def require_user_or_open_access(request: Request, db=Depends(get_db)) -> str | None:
+  """
+  Allow anonymous access only when OPEN_ACCESS is enabled.
+  Otherwise require a valid session token.
+  """
+  if OPEN_ACCESS:
+    return None
+  return require_user(request, db)
 
 
 router = APIRouter(tags=["accounts"])

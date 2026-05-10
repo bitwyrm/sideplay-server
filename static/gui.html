@@ -197,9 +197,10 @@
     <div class="card">
       <h2>Connect Account</h2>
       <div class="row">
-        <button onclick="linkSpotify()">Link Spotify</button>
-        <button onclick="linkYouTube()">Link YouTube</button>
+        <button id="btnLinkSpotify" onclick="linkSpotify()">Link Spotify</button>
+        <button id="btnLinkYouTube" onclick="linkYouTube()">Link YouTube</button>
       </div>
+      <pre id="capabilitiesStatus"></pre>
     </div>
 
     <!-- CONNECTED ACCOUNTS -->
@@ -214,8 +215,8 @@
       <h2>Unlink Account</h2>
       <label>Provider</label>
       <select id="unlinkProvider">
-        <option value="spotify">Spotify</option>
-        <option value="youtube">YouTube</option>
+        <option id="optUnlinkSpotify" value="spotify">Spotify</option>
+        <option id="optUnlinkYouTube" value="youtube">YouTube</option>
       </select>
       <label>External ID</label>
       <input id="unlinkExternalId" placeholder="Account external ID" />
@@ -228,8 +229,8 @@
       <h2>Manage Track</h2>
       <label>Provider</label>
       <select id="manualProvider">
-        <option value="youtube">YouTube</option>
-        <option value="spotify">Spotify</option>
+        <option id="optManualYouTube" value="youtube">YouTube</option>
+        <option id="optManualSpotify" value="spotify">Spotify</option>
       </select>
       <label>Track ID</label>
       <input id="manualId" placeholder="Track ID" />
@@ -244,13 +245,13 @@
     <div class="card">
       <h2>Search Songs</h2>
       <input id="songQuery" placeholder="Song or artist" />
-      <button onclick="searchSongs()">Search</button>
+      <button id="btnSearchSongs" onclick="searchSongs()">Search</button>
       <pre id="songResults"></pre>
     </div>
     <div class="card">
       <h2>Search Playlists</h2>
       <input id="playlistQuery" placeholder="Playlist name" />
-      <button onclick="searchPlaylists()">Search</button>
+      <button id="btnSearchPlaylists" onclick="searchPlaylists()">Search</button>
       <pre id="playlistResults"></pre>
     </div>
 
@@ -259,8 +260,8 @@
       <h2>Link Playlist</h2>
       <label>Provider</label>
       <select id="linkProvider">
-        <option value="spotify">Spotify</option>
-        <option value="youtube">YouTube</option>
+        <option id="optLinkSpotify" value="spotify">Spotify</option>
+        <option id="optLinkYouTube" value="youtube">YouTube</option>
       </select>
       <label>Account ID / Sub</label>
       <input id="linkAccountId" placeholder="Spotify ID or YouTube sub" />
@@ -354,6 +355,66 @@
 
     <script>
       let sessionToken = localStorage.getItem("session-token");
+      let appCapabilities = null;
+
+      async function loadCapabilities() {
+        try {
+          const res = await fetch("/capabilities");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          appCapabilities = await res.json();
+          applyCapabilities(appCapabilities);
+        } catch (err) {
+          capabilitiesStatus.textContent = `Failed to load capabilities: ${err}`;
+        }
+      }
+
+      function applyCapabilities(cap) {
+        const spotifyEnabled = !!cap?.spotify;
+        const youtubeLinkEnabled = !!cap?.youtube;
+
+        linkProvider.disabled = false;
+        optLinkSpotify.disabled = false;
+        optLinkYouTube.disabled = false;
+
+        btnLinkSpotify.disabled = !spotifyEnabled;
+        btnLinkYouTube.disabled = !youtubeLinkEnabled;
+
+        if (!spotifyEnabled) {
+          optUnlinkSpotify.disabled = true;
+          optManualSpotify.disabled = true;
+          if (unlinkProvider.value === "spotify") unlinkProvider.value = "youtube";
+          if (manualProvider.value === "spotify") manualProvider.value = "youtube";
+        }
+        if (!youtubeLinkEnabled) {
+          optUnlinkYouTube.disabled = true;
+          optManualYouTube.disabled = true;
+          if (unlinkProvider.value === "youtube") unlinkProvider.value = spotifyEnabled ? "spotify" : "";
+          if (manualProvider.value === "youtube") manualProvider.value = spotifyEnabled ? "spotify" : "";
+        }
+
+        updateLinkAccountInputState();
+        capabilitiesStatus.textContent = JSON.stringify(cap, null, 2);
+      }
+
+      function updateLinkAccountInputState() {
+        const spotifyEnabled = !!appCapabilities?.spotify;
+        const youtubeLinkEnabled = !!appCapabilities?.youtube;
+        const provider = linkProvider.value;
+
+        if (provider === "spotify" && !spotifyEnabled) {
+          linkAccountId.disabled = true;
+          linkAccountId.placeholder = "Spotify disabled: missing/inaccessible creds";
+          return;
+        }
+        if (provider === "youtube" && !youtubeLinkEnabled) {
+          linkAccountId.disabled = true;
+          linkAccountId.placeholder = "YouTube linking disabled: missing/inaccessible creds";
+          return;
+        }
+
+        linkAccountId.disabled = false;
+        linkAccountId.placeholder = provider === "spotify" ? "Spotify account ID" : "YouTube sub";
+      }
 
       // ---------------- AUTH ----------------
       async function signup() {
@@ -407,13 +468,99 @@
         songResults.textContent = JSON.stringify(await res.json(), null, 2);
       }
       async function searchPlaylists() {
-        const res = await fetch("/search/playlists", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: playlistQuery.value }) });
-        playlistResults.textContent = JSON.stringify(await res.json(), null, 2);
+        playlistResults.textContent = "";
+        const headers = { "Content-Type": "application/json" };
+        if (sessionToken) headers["session_token"] = sessionToken;
+        const res = await fetch("/search/playlists/stream", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ query: playlistQuery.value })
+        });
+        if (!res.ok || !res.body) {
+          playlistResults.textContent += `Failed: ${res.status} ${res.statusText}\n`;
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        const aggregate = { youtube: [], spotify: [] };
+        const findJsonObjectEnd = (text) => {
+          let depth = 0;
+          let inString = false;
+          let escape = false;
+          let started = false;
+          for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            if (!started) {
+              if (/\s/.test(ch)) continue;
+              if (ch !== "{") return -1;
+              started = true;
+              depth = 1;
+              continue;
+            }
+            if (inString) {
+              if (escape) {
+                escape = false;
+              } else if (ch === "\\") {
+                escape = true;
+              } else if (ch === "\"") {
+                inString = false;
+              }
+              continue;
+            }
+            if (ch === "\"") {
+              inString = true;
+            } else if (ch === "{") {
+              depth += 1;
+            } else if (ch === "}") {
+              depth -= 1;
+              if (depth === 0) return i + 1;
+            }
+          }
+          return -1;
+        };
+        const handlePlaylistEvent = (evt) => {
+          if (!evt || typeof evt !== "object") return;
+          if (Array.isArray(evt.youtube)) {
+            aggregate.youtube = evt.youtube;
+            playlistResults.textContent += JSON.stringify({ youtube: evt.youtube }, null, 2) + "\n";
+          }
+          if (Array.isArray(evt.spotify)) {
+            aggregate.spotify = evt.spotify;
+            playlistResults.textContent += JSON.stringify({ spotify: evt.spotify }, null, 2) + "\n";
+          }
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          while (true) {
+            const end = findJsonObjectEnd(buffer);
+            if (end === -1) break;
+            const chunk = buffer.slice(0, end);
+            buffer = buffer.slice(end).trimStart();
+            try {
+              const evt = JSON.parse(chunk);
+              handlePlaylistEvent(evt);
+            } catch {
+              // keep going; malformed chunk should not block subsequent objects
+            }
+          }
+        }
+        if (buffer.trim()) {
+          try {
+            const evt = JSON.parse(buffer.trim());
+            handlePlaylistEvent(evt);
+          } catch { }
+        }
       }
 
       // ---------------- PLAYLISTS ----------------
       async function linkPlaylist() {
-        const res = await fetch("/playlists/link", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ provider: linkProvider.value, account_id: linkAccountId.value || null, sub: linkAccountId.value || null, playlist_id: linkPlaylistId.value }) });
+        const accountValue = linkAccountId.disabled ? null : (linkAccountId.value || null);
+        const res = await fetch("/playlists/link", { method: "POST", headers: { "Content-Type": "application/json", "session_token": sessionToken }, body: JSON.stringify({ provider: linkProvider.value, account_id: accountValue, sub: accountValue, playlist_id: linkPlaylistId.value }) });
         linkResult.textContent = JSON.stringify(await res.json(), null, 2);
       }
       async function listPlaylists() {
@@ -565,6 +712,9 @@
         });
         whitelistOutput.textContent = res.ok ? JSON.stringify(await res.json(), null, 2) : "Failed to load whitelist";
       }
+
+      linkProvider.addEventListener("change", updateLinkAccountInputState);
+      loadCapabilities();
     </script>
   </div>
 </body>

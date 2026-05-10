@@ -1,11 +1,13 @@
 import os
+import logging
+from logging.handlers import RotatingFileHandler
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from helpers.setup import STATIC_DIR
+from helpers.setup import DATA_ROOT, STATIC_DIR
 from helpers.db import init_db
 from helpers.external import router as external_router
 from helpers.accounts import router as accounts_router
@@ -17,6 +19,26 @@ from helpers.media import router as media_router
 from helpers.whitelist import router as whitelist_router
 
 app = FastAPI(title="Sideplay API")
+
+
+def _configure_file_logging() -> None:
+  os.makedirs(os.path.join(DATA_ROOT, "logs"), exist_ok=True)
+  logfile = os.path.join(DATA_ROOT, "logs", "core.log")
+  root = logging.getLogger()
+  root.setLevel(logging.INFO)
+  if not any(
+    isinstance(h, RotatingFileHandler) and getattr(h, "baseFilename", "") == logfile
+    for h in root.handlers
+  ):
+    file_handler = RotatingFileHandler(logfile, maxBytes=10 * 1024 * 1024, backupCount=5)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(
+      logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    )
+    root.addHandler(file_handler)
+
+
+_configure_file_logging()
 
 init_db()
 

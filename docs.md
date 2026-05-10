@@ -348,7 +348,7 @@ If no accounts → empty list
 8. Call media service:
 
    ```
-   ensure_media(youtube_ids)
+   ensure_media(tracks)
    ```
 9. Stream progress to API (songs downloaded, songs failed, and current song being worked on)
 10. Forward streamed progress to user (how many downloaded, how many failed, how many total)
@@ -368,7 +368,14 @@ If no accounts → empty list
 
 ```json
 {
-  "youtube_ids": ["id1", "id2", ...]
+  "tracks": [
+    {
+      "youtube_id": "id1",
+      "song_name": "optional title",
+      "artist": "optional artist",
+      "album": "optional album"
+    }
+  ]
 }
 ```
 

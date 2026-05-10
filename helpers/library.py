@@ -93,13 +93,14 @@ def add_track_individually(
     # -------------------------------------------------
     db.execute(
       """
-        INSERT OR IGNORE INTO tracks (youtube_id, title, artists, available)
-        VALUES (?, ?, ?, ?)
+        INSERT OR IGNORE INTO tracks (youtube_id, title, artists, album, available)
+        VALUES (?, ?, ?, ?, ?)
       """,
       (
         song["youtube_id"],
         song["title"],
         json.dumps(song["artists"], ensure_ascii=False),
+        song.get("album"),
         0,
       ),
     )
@@ -115,6 +116,7 @@ def add_track_individually(
       "youtube_id": song["youtube_id"],
       "title": song["title"],
       "artists": song["artists"],
+      "album": song.get("album"),
     }
 
   except Exception as e:
@@ -238,6 +240,7 @@ def get_metadata(user_id: str = Depends(require_user), db=Depends(get_db)) -> di
         t.youtube_id,
         t.title,
         t.artists,
+        t.album,
         t.available
       FROM tracks t
       JOIN user_library ul
@@ -252,6 +255,7 @@ def get_metadata(user_id: str = Depends(require_user), db=Depends(get_db)) -> di
       "youtube_id": r["youtube_id"],
       "title": r["title"],
       "artists": json.loads(r["artists"]),
+      "album": r["album"],
       "available": bool(r["available"]),
     }
     for r in library_rows
@@ -284,7 +288,10 @@ def get_metadata(user_id: str = Depends(require_user), db=Depends(get_db)) -> di
 
     if tracks is None:
       if pl["provider"] == "youtube":
-        tracks = yt_music_lib.get_playlist_songs(pl["external_id"], pl["playlist_id"])
+        if pl["external_id"]:
+          tracks = yt_music_lib.get_playlist_songs(pl["external_id"], pl["playlist_id"])
+        else:
+          tracks = yt_music_lib.get_playlist_video_ids_public(pl["playlist_id"])
       elif pl["provider"] == "spotify":
         tracks = spotify_lib.get_playlist_songs(pl["external_id"], pl["playlist_id"])
       else:

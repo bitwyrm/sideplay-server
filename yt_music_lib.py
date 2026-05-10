@@ -14,6 +14,7 @@ All persistent state is stored on disk and refreshed via external scheduling.
 
 import json
 import time
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -22,9 +23,11 @@ import redis
 import requests
 from ytmusicapi import YTMusic
 from helpers.setup import (
+  GOOGLE_CREDENTIALS_ACCESSIBLE,
   GOOGLE_CREDENTIALS_FILE,
   GOOGLE_OAUTH_DIR,
   NORMALIZE_MAP_PATH,
+  YT_HEADERS_ACCESSIBLE,
   YT_HEADERS_FILE,
 )
 
@@ -53,6 +56,7 @@ r = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 # -------------------------------------------------------------------
 
 _public_client: Optional[YTMusic] = None
+logger = logging.getLogger(__name__)
 
 
 def get_public_client() -> YTMusic:
@@ -62,13 +66,28 @@ def get_public_client() -> YTMusic:
   global _public_client
   if _public_client is None:
     try:
-      if Path(headers_path).exists():
+      if YT_HEADERS_ACCESSIBLE:
         _public_client = YTMusic(headers_path)
-      else:
+      elif not Path(headers_path).exists():
+        logger.warning(
+          "event=youtube_public_headers_missing path=%s fallback=anonymous_client",
+          headers_path,
+        )
         _public_client = YTMusic()
-    except Exception:
+      else:
+        logger.warning(
+          "event=youtube_public_headers_disabled env_or_access_missing path=%s fallback=anonymous_client",
+          headers_path,
+        )
+        _public_client = YTMusic()
+    except Exception as exc:
       # If provided auth file is not a browser headers export (for example OAuth JSON),
       # fall back to an anonymous client so public search still works.
+      logger.warning(
+        "event=youtube_public_client_init_error path=%s error=%s fallback=anonymous_client",
+        headers_path,
+        exc,
+      )
       _public_client = YTMusic()
   return _public_client
 
@@ -143,6 +162,10 @@ def needs_reresolve(resolved_at: str, days: int) -> bool:
 
 
 def refresh_access_token(sub: str) -> dict:
+  if not GOOGLE_CREDENTIALS_ACCESSIBLE:
+    raise RuntimeError(
+      "youtube_google_credentials_unavailable: missing env or inaccessible file"
+    )
   token_path = cache_dir / f"{sub}.json"
   token_data = load_json(token_path)
 
@@ -208,6 +231,7 @@ def search_songs(query: str) -> List[Dict]:
       "title": item.get("title"),
       "youtube_id": item.get("videoId"),
       "artists": [a.get("name") for a in item.get("artists", []) if a.get("name")],
+      "album": (item.get("album") or {}).get("name"),
     }
     for item in results
     if item and item.get("videoId")
@@ -275,15 +299,26 @@ def map_query_to_song(query: str) -> Optional[dict]:
 
   client = get_public_client()
   results = client.search(query=query, filter="songs", limit=1)
-  if not results:
-    song = None
-  else:
+  if results:
     r = results[0]
     song = {
       "youtube_id": r.get("videoId"),
       "title": r.get("title"),
       "artists": [a.get("name") for a in r.get("artists", []) if a.get("name")],
+      "album": (r.get("album") or {}).get("name"),
     }
+  else:
+    # Fallback to a basic search shape. Do NOT set album metadata in this path.
+    fallback = client.search(query=query, limit=1)
+    if not fallback:
+      song = None
+    else:
+      r = fallback[0]
+      song = {
+        "youtube_id": r.get("videoId"),
+        "title": r.get("title"),
+        "artists": [a.get("name") for a in r.get("artists", []) if a.get("name")],
+      }
 
   redis_set_json(
     key,
@@ -293,6 +328,8 @@ def map_query_to_song(query: str) -> Optional[dict]:
     },
     ttl=YOUTUBE_CACHE_TTL,
   )
+  if song and not song.get("youtube_id"):
+    return None
   return song
 
 
@@ -305,6 +342,12 @@ def get_user_playlists(sub: str) -> List[Dict]:
   """
   Retrieve all playlists created by the authenticated user (by sub).
   """
+  if not GOOGLE_CREDENTIALS_ACCESSIBLE:
+    logger.warning(
+      "event=youtube_private_playlists_disabled sub=%s reason=google_credentials_unavailable",
+      sub,
+    )
+    return []
   playlists: List[Dict] = []
   page_token: Optional[str] = None
 
@@ -341,6 +384,13 @@ def get_playlist_songs(sub: str, playlist_id: str) -> List[str]:
   """
   Retrieve all YouTube video IDs from a playlist for the given user sub.
   """
+  if not GOOGLE_CREDENTIALS_ACCESSIBLE:
+    logger.warning(
+      "event=youtube_private_playlist_tracks_disabled sub=%s playlist_id=%s reason=google_credentials_unavailable",
+      sub,
+      playlist_id,
+    )
+    return []
   tracks: List[str] = []
   page_token: Optional[str] = None
 
@@ -382,3 +432,33 @@ def get_playlist_songs_public(playlist_id: str) -> List[Dict]:
   """
   playlist = get_public_client().get_playlist(playlist_id, limit=None)
   return playlist.get("tracks", [])
+
+
+def get_playlist_video_ids_public(playlist_id: str) -> List[str]:
+  """
+  Retrieve YouTube video IDs from a public playlist.
+  """
+  tracks = get_playlist_songs_public(playlist_id)
+  out: List[str] = []
+  for t in tracks:
+    if not isinstance(t, dict):
+      continue
+    video_id = t.get("videoId") or t.get("video_id")
+    if video_id:
+      out.append(video_id)
+  return out
+
+
+def get_playlist_info_public(playlist_id: str) -> Optional[dict]:
+  """
+  Resolve basic public playlist metadata without requiring linked Google creds.
+  Returns: {"id": str, "title": str} or None.
+  """
+  try:
+    playlist = get_public_client().get_playlist(playlist_id, limit=1)
+  except Exception:
+    return None
+  title = (playlist or {}).get("title")
+  if not title:
+    return None
+  return {"id": playlist_id, "title": str(title)}

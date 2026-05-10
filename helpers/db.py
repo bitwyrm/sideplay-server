@@ -76,6 +76,7 @@ def init_db() -> None:
       youtube_id TEXT PRIMARY KEY,
       artists TEXT NOT NULL,
       title TEXT NOT NULL,
+      album TEXT,
       available INTEGER NOT NULL
     )
   """)

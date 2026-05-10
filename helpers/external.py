@@ -13,9 +13,11 @@ from helpers.db import get_db
 from helpers.accounts import get_user_from_session, require_user
 from helpers.setup import (
   GOOGLE_CREDENTIALS_FILE,
+  GOOGLE_CREDENTIALS_ACCESSIBLE,
   GOOGLE_OAUTH_DIR,
   SPOTIFY_CLIENT_ID,
   SPOTIFY_CLIENT_SECRET,
+  SPOTIFY_ENABLED,
   SPOTIFY_OAUTH_DIR,
   SPOTIFY_REDIRECT,
   SPOTIFY_SCOPES,
@@ -61,6 +63,8 @@ def spotify_start(token: str, db=Depends(get_db)) -> RedirectResponse:
   user_id = get_user_from_session(token, db)
   if not user_id:
     raise HTTPException(401)
+  if not SPOTIFY_ENABLED:
+    raise HTTPException(503, "Spotify linking is disabled: missing spotify credentials")
 
   auth = SpotifyOAuth(
     client_id=SPOTIFY_CLIENT_ID,
@@ -94,6 +98,8 @@ def spotify_callback(code: str, state: str, db=Depends(get_db)) -> RedirectRespo
   user_id = get_user_from_session(state, db)
   if not user_id:
     raise HTTPException(401)
+  if not SPOTIFY_ENABLED:
+    raise HTTPException(503, "Spotify linking is disabled: missing spotify credentials")
 
   os.makedirs(SPOTIFY_OAUTH_DIR, exist_ok=True)
 
@@ -141,6 +147,8 @@ def youtube_start(token: str, db=Depends(get_db)) -> RedirectResponse:
   user_id = get_user_from_session(token, db)
   if not user_id:
     raise HTTPException(401)
+  if not GOOGLE_CREDENTIALS_ACCESSIBLE:
+    raise HTTPException(503, "YouTube linking is disabled: google credentials unavailable")
 
   flow = Flow.from_client_secrets_file(
     GOOGLE_CREDENTIALS_FILE,
@@ -178,6 +186,8 @@ def youtube_callback(code: str, state: str, db=Depends(get_db)) -> RedirectRespo
   user_id = get_user_from_session(state, db)
   if not user_id:
     raise HTTPException(401)
+  if not GOOGLE_CREDENTIALS_ACCESSIBLE:
+    raise HTTPException(503, "YouTube linking is disabled: google credentials unavailable")
 
   flow = Flow.from_client_secrets_file(
     GOOGLE_CREDENTIALS_FILE,

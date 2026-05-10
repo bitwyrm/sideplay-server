@@ -20,9 +20,17 @@
 
 ## Common failures
 - `Missing session_token`: protected endpoint called without auth header.
-- `youtube_ids required`: media ensure request body missing ids.
+- `tracks required`: media ensure request body missing `tracks`.
 - `Connection refused` to media service from sync: media worker not running.
 - OAuth callback failures: redirect URIs or credential files mismatched.
+
+## Streaming search contract
+- `POST /search/playlists/stream` returns JSONL with two provider chunks:
+  - first line: `{"youtube":[...]}`
+  - second line: `{"spotify":[...]}`
+
+## Access mode
+- `OPEN_ACCESS` (default `false`) controls anonymous access for selected read/search endpoints.
 
 ## Logs and diagnostics
 - API and media services log structured events to stdout.
@@ -35,4 +43,3 @@
 - Stale cache behavior: restart Redis or delete specific keys.
 - Corrupt local media/thumbnail files: remove file(s) and run sync again.
 - Schema drift concerns: restart API to run startup migrations in `helpers/db.py`.
-
