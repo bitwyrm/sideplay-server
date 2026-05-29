@@ -121,6 +121,7 @@ Search:
 
 Sync + media:
 - `POST /sync-library` (streams JSONL progress)
+- `GET /tracks/{youtube_id}/stream` (range-enabled streaming of available cached media)
 - `GET /tracks/{youtube_id}/media`
 - `GET /tracks/{youtube_id}/thumbnail`
 - `POST http://127.0.0.1:7000/ensure-media` (internal worker endpoint)

@@ -62,6 +62,7 @@ This document describes the current API surface and how data moves between the A
 ### Sync and Media
 
 - `POST /sync-library` (JSONL streaming progress)
+- `GET /tracks/{youtube_id}/stream` (byte-range streaming; requires local cached media and `tracks.available = 1`)
 - `GET /tracks/{youtube_id}/media`
 - `GET /tracks/{youtube_id}/thumbnail`
 - `POST http://127.0.0.1:7000/ensure-media` (internal worker endpoint)
