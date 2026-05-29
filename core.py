@@ -3,6 +3,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -72,7 +73,11 @@ async def validation_exception_handler(
   """
   return JSONResponse(
     status_code=422,
-    content={"ok": False, "error": "Validation error", "details": exc.errors()},
+    content={
+      "ok": False,
+      "error": "Validation error",
+      "details": jsonable_encoder(exc.errors()),
+    },
   )
 
 

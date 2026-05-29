@@ -59,7 +59,7 @@ def sync_all(
   ).fetchall()
 
   if not playlists:
-    return {"ok": True, "message": "No playlists"}
+    return {"ok": True, "message": "No linked playlists"}
 
   # -------------------------------------------------
   # 2. Fetch all tracks from each playlist (normalized)
@@ -78,8 +78,21 @@ def sync_all(
       )
       continue
     for t in tracks:
+      if isinstance(t, str) and t:
+        merged_tracks[t] = {
+          "youtube_id": t,
+          "title": "",
+          "artists": [],
+          "album": None,
+        }
+        continue
+      if not isinstance(t, dict):
+        continue
+      yt_id = t.get("youtube_id")
+      if not isinstance(yt_id, str) or not yt_id:
+        continue
       # Remove duplicates
-      merged_tracks[t["youtube_id"]] = t
+      merged_tracks[yt_id] = t
 
   if not merged_tracks:
     if skipped_playlists:
@@ -107,15 +120,23 @@ def sync_all(
     len(resolved),
   )
 
+  _fill_metadata_gaps(resolved)
+
   for yt_id, meta in resolved.items():
     db.execute(
       """
         INSERT INTO tracks (youtube_id, title, artists, album, available)
         VALUES (?, ?, ?, ?, 0)
         ON CONFLICT(youtube_id) DO UPDATE SET
-          title = excluded.title,
-          artists = excluded.artists,
-          album = excluded.album
+          title = CASE
+            WHEN excluded.title IS NOT NULL AND excluded.title != '' THEN excluded.title
+            ELSE tracks.title
+          END,
+          artists = CASE
+            WHEN excluded.artists IS NOT NULL AND excluded.artists != '[]' THEN excluded.artists
+            ELSE tracks.artists
+          END,
+          album = COALESCE(excluded.album, tracks.album)
       """,
       (
         yt_id,
@@ -154,6 +175,30 @@ def sync_all(
     stream_progress(to_download, skipped_playlists),
     media_type="application/jsonl",
   )
+
+
+def _fill_metadata_gaps(resolved: dict[str, dict]) -> None:
+  """Fill title/artists/album gaps using ytmusic lookups."""
+  for yt_id, meta in resolved.items():
+    title = (meta.get("title") or "").strip()
+    artists = meta.get("artists") or []
+    album = meta.get("album")
+    if title and artists and album:
+      continue
+
+    query = yt_music_lib.map_video_to_query(yt_id)
+    if not query:
+      continue
+    song = yt_music_lib.map_query_to_song(query)
+    if not song:
+      continue
+
+    if not title:
+      meta["title"] = song.get("title") or meta.get("title", "")
+    if not artists:
+      meta["artists"] = song.get("artists") or meta.get("artists", [])
+    if not album:
+      meta["album"] = song.get("album") or meta.get("album")
 
 
 def stream_progress(

@@ -15,7 +15,7 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
     sqlite3.Connection: Active database connection.
   """
   os.makedirs("data", exist_ok=True)
-  conn = sqlite3.connect(DB_PATH)
+  conn = sqlite3.connect(DB_PATH, check_same_thread=False)
   conn.row_factory = sqlite3.Row
   # Enable foreign key enforcement for SQLite
   conn.execute("PRAGMA foreign_keys = ON")
