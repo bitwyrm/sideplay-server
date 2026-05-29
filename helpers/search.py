@@ -12,6 +12,7 @@ from helpers.setup import (
 )
 
 router = APIRouter(tags=["search"])
+capabilities_router = APIRouter(tags=["capabilities"])
 logger = logging.getLogger(__name__)
 
 
@@ -111,7 +112,7 @@ def search_playlists_youtube(
     return []
 
 
-@router.get("/capabilities", tags=["capabilities"])
+@capabilities_router.get("/capabilities")
 def capabilities() -> dict:
   """
   Return credential/capability state so clients can adapt UI behavior.

@@ -135,44 +135,61 @@ def link_playlist(
 @router.get("/playlists")
 def playlists(user_id: str = Depends(require_user), db=Depends(get_db)) -> list[dict]:
   """
-  List all external playlists for the current user.
-
-  Returns:
-    list[dict]: Each playlist includes provider-specific metadata plus
-                'provider' key.
+  List all playlists for the current user (local + linked).
   """
   rows = db.execute(
-    "SELECT provider, external_id FROM accounts WHERE user_id = ?", (user_id,)
+    """
+      SELECT playlist_id, provider, external_id, name, local_tracks, last_synced_at
+      FROM playlists
+      WHERE user_id = ?
+      ORDER BY name COLLATE NOCASE ASC
+    """,
+    (user_id,),
   ).fetchall()
 
   out = []
-  for acc in rows:
-    if acc["provider"] == "spotify":
-      try:
-        playlists = spotify_lib.get_user_playlists(acc["external_id"])
-      except Exception as exc:
-        logger.warning(
-          "event=list_playlists_provider_error provider=spotify external_id=%s error=%s",
-          acc["external_id"],
-          exc,
-        )
-        playlists = []
-      for p in playlists:
-        out.append({**p, "provider": "spotify"})
-    if acc["provider"] == "youtube":
-      try:
-        playlists = yt_music_lib.get_user_playlists(acc["external_id"])
-      except Exception as exc:
-        logger.warning(
-          "event=list_playlists_provider_error provider=youtube external_id=%s error=%s",
-          acc["external_id"],
-          exc,
-        )
-        playlists = []
-      for p in playlists:
-        out.append({**p, "provider": "youtube"})
-
+  for row in rows:
+    normalized_tracks = get_playlist_tracks_normalized(dict(row), user_id, db)
+    out.append(
+      {
+        "playlist_id": row["playlist_id"],
+        "provider": row["provider"],
+        "external_id": row["external_id"],
+        "name": row["name"],
+        "last_synced_at": row["last_synced_at"],
+        "tracks": normalized_tracks,
+      }
+    )
   return out
+
+
+@router.get("/playlists/{playlist_id}")
+def get_playlist(
+  playlist_id: str, user_id: str = Depends(require_user), db=Depends(get_db)
+) -> dict:
+  """
+  Return a single playlist (local or linked) for the current user.
+  """
+  row = db.execute(
+    """
+      SELECT playlist_id, provider, external_id, name, local_tracks, last_synced_at
+      FROM playlists
+      WHERE playlist_id = ? AND user_id = ?
+    """,
+    (playlist_id, user_id),
+  ).fetchone()
+  if not row:
+    raise HTTPException(404, "Playlist not found")
+
+  normalized_tracks = get_playlist_tracks_normalized(dict(row), user_id, db)
+  return {
+    "playlist_id": row["playlist_id"],
+    "provider": row["provider"],
+    "external_id": row["external_id"],
+    "name": row["name"],
+    "last_synced_at": row["last_synced_at"],
+    "tracks": normalized_tracks,
+  }
 
 
 # -------------------------------------------------------------------
@@ -311,7 +328,7 @@ def update_local_playlist(
 # -------------------------------------------------------------------
 # DELETE PLAYLIST
 # -------------------------------------------------------------------
-@router.delete("/playlists/{playlist_id}")
+@router.delete("/playlists/delete/{playlist_id}")
 def delete_playlist(
   playlist_id: str,
   cascade: bool = False,

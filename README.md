@@ -137,6 +137,7 @@ Most protected API endpoints expect a `session_token` request header. Tokens are
 `POST /sign-up` defaults and validation:
 - `username`: 3-64 chars (leading/trailing whitespace trimmed)
 - `password`: 8-128 chars
+
 ## Sync Flow
 
 `POST /sync-library`:

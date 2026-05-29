@@ -16,6 +16,7 @@ from helpers.sync import router as sync_router
 from helpers.library import router as library_router
 from helpers.playlists import router as playlists_router
 from helpers.search import router as search_router
+from helpers.search import capabilities_router
 from helpers.media import router as media_router
 from helpers.whitelist import router as whitelist_router
 
@@ -115,6 +116,7 @@ app.include_router(library_router)
 app.include_router(accounts_router)
 app.include_router(playlists_router)
 app.include_router(search_router)
+app.include_router(capabilities_router)
 app.include_router(media_router)
 app.include_router(whitelist_router)
 
